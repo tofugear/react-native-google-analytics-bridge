@@ -4,7 +4,9 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMapKeySetIterator;
+import com.facebook.react.bridge.Promise;
 
 import com.google.android.gms.analytics.GoogleAnalytics;
 import com.google.android.gms.analytics.HitBuilders;
@@ -75,13 +77,16 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
                         .setCategory(category)
                         .setAction(action);
 
-            if (optionalValues.hasKey("label"))
+            if (optionalValues != null)
             {
-                hit.setLabel(optionalValues.getString("label"));
-            }
-            if (optionalValues.hasKey("value"))
-            {
-                hit.setValue(optionalValues.getInt("value"));
+                if (optionalValues.hasKey("label"))
+                {
+                    hit.setLabel(optionalValues.getString("label"));
+                }
+                if (optionalValues.hasKey("value"))
+                {
+                    hit.setValue((long) optionalValues.getDouble("value"));
+                }
             }
 
             tracker.send(hit.build());
@@ -98,13 +103,16 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
                         .setCategory(category)
                         .setValue(value.longValue());
 
-            if (optionalValues.hasKey("name"))
+            if (optionalValues != null)
             {
-                hit.setVariable(optionalValues.getString("name"));
-            }
-            if (optionalValues.hasKey("label"))
-            {
-                hit.setLabel(optionalValues.getString("label"));
+                if (optionalValues.hasKey("name"))
+                {
+                    hit.setVariable(optionalValues.getString("name"));
+                }
+                if (optionalValues.hasKey("label"))
+                {
+                    hit.setLabel(optionalValues.getString("label"));
+                }
             }
 
             tracker.send(hit.build());
@@ -116,32 +124,127 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
         Tracker tracker = getTracker(trackerId);
 
         if (tracker != null) {
-            Product ecommerceProduct = new Product()
-                    .setId(product.getString("id"))
-                    .setName(product.getString("name"))
-                    .setCategory(product.getString("category"))
-                    .setBrand(product.getString("brand"))
-                    .setVariant(product.getString("variant"))
-                    .setPrice(product.getDouble("price"))
-                    .setCouponCode(product.getString("couponCode"))
-                    .setQuantity(product.getInt("quantity"));
-
-            ProductAction productAction = new ProductAction(ProductAction.ACTION_PURCHASE)
-                    .setTransactionId(transaction.getString("id"))
-                    .setTransactionAffiliation(transaction.getString("affiliation"))
-                    .setTransactionRevenue(transaction.getDouble("revenue"))
-                    .setTransactionTax(transaction.getDouble("tax"))
-                    .setTransactionShipping(transaction.getDouble("shipping"))
-                    .setTransactionCouponCode(transaction.getString("couponCode"));
 
             HitBuilders.EventBuilder hit = new HitBuilders.EventBuilder()
-                    .addProduct(ecommerceProduct)
-                    .setProductAction(productAction)
-                    .setCategory(eventCategory)
-                    .setAction(eventAction);
+                   .addProduct(this.getPurchaseProduct(product))
+                   .setProductAction(this.getPurchaseTransaction(transaction))
+                   .setCategory(eventCategory)
+                   .setAction(eventAction);
 
             tracker.send(hit.build());
         }
+    }
+
+    @ReactMethod
+    public void trackMultiProductsPurchaseEvent(String trackerId, ReadableArray products, ReadableMap transaction, String eventCategory, String eventAction) {
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null) {
+
+            HitBuilders.EventBuilder hit = new HitBuilders.EventBuilder()
+                   .setProductAction(this.getPurchaseTransaction(transaction))
+                   .setCategory(eventCategory)
+                   .setAction(eventAction);
+
+            for (int i = 0; i < products.size(); i++) {
+                ReadableMap product = products.getMap(i);
+                hit.addProduct(this.getPurchaseProduct(product));
+            }
+
+            tracker.send(hit.build());
+        }
+    }
+
+    @ReactMethod
+    public void trackMultiProductsPurchaseEventWithCustomDimensionValues(String trackerId, ReadableArray products, ReadableMap transaction, String eventCategory, String eventAction, ReadableMap dimensionIndexValues) {
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null) {
+
+            HitBuilders.EventBuilder hit = new HitBuilders.EventBuilder()
+                   .setProductAction(this.getPurchaseTransaction(transaction))
+                   .setCategory(eventCategory)
+                   .setAction(eventAction);
+
+            for (int i = 0; i < products.size(); i++) {
+                ReadableMap product = products.getMap(i);
+                hit.addProduct(this.getPurchaseProduct(product));
+            }
+
+            ReadableMapKeySetIterator iterator = dimensionIndexValues.keySetIterator();
+            while (iterator.hasNextKey()) {
+                String dimensionIndex = iterator.nextKey();
+                String dimensionValue = dimensionIndexValues.getString(dimensionIndex);
+                hit.setCustomDimension(Integer.parseInt(dimensionIndex), dimensionValue);
+            }
+
+            tracker.send(hit.build());
+        }
+    }
+
+    private ProductAction getPurchaseTransaction(ReadableMap transaction) {
+        ProductAction productAction = new ProductAction(ProductAction.ACTION_PURCHASE)
+           .setTransactionId(transaction.getString("id"));
+
+        // Id is the only required value
+        // https://developers.google.com/analytics/devguides/collection/analyticsjs/enhanced-ecommerce#action-data
+
+        if(transaction.hasKey("tax")) {
+           productAction.setTransactionTax(transaction.getDouble("tax"));
+        }
+
+        if(transaction.hasKey("revenue")) {
+           productAction.setTransactionRevenue(transaction.getDouble("revenue"));
+        }
+
+        if(transaction.hasKey("shipping")) {
+           productAction.setTransactionShipping(transaction.getDouble("shipping"));
+        }
+
+        if(transaction.hasKey("couponCode")) {
+           productAction.setTransactionCouponCode(transaction.getString("couponCode"));
+        }
+
+        if(transaction.hasKey("affiliation")) {
+           productAction.setTransactionAffiliation(transaction.getString("affiliation"));
+        }
+
+        return productAction;
+    }
+
+    private Product getPurchaseProduct(ReadableMap product) {
+        Product ecommerceProduct = new Product()
+           .setId(product.getString("id"))
+           .setName(product.getString("name"));
+
+        // A Product must have a name or id value. All other values are optional and don't need to be set.
+        // https://developers.google.com/analytics/devguides/collection/android/v4/enhanced-ecommerce#measuring-impressions
+
+        if(product.hasKey("brand")) {
+           ecommerceProduct.setBrand(product.getString("brand"));
+        }
+
+        if(product.hasKey("price")) {
+           ecommerceProduct.setPrice(product.getDouble("price"));
+        }
+
+        if(product.hasKey("quantity")) {
+           ecommerceProduct.setQuantity(product.getInt("quantity"));
+        }
+
+        if(product.hasKey("variant")) {
+           ecommerceProduct.setVariant(product.getString("variant"));
+        }
+
+        if(product.hasKey("category")) {
+           ecommerceProduct.setCategory(product.getString("category"));
+        }
+
+        if(product.hasKey("couponCode")) {
+           ecommerceProduct.setCouponCode(product.getString("couponCode"));
+        }
+
+        return ecommerceProduct;
     }
 
     @ReactMethod
@@ -164,6 +267,16 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
 
         if (tracker != null) {
             tracker.set("&uid", userId);
+        }
+    }
+
+    @ReactMethod
+    public void setClient(String trackerId, String clientId)
+    {
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null) {
+            tracker.set("&cid", clientId);
         }
     }
 
@@ -213,6 +326,12 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
     @ReactMethod
     public void trackEventWithCustomDimensionValues(String trackerId, String category, String action, ReadableMap optionalValues, ReadableMap dimensionIndexValues)
     {
+        this.trackEventWithCustomDimensionAndMetricValues(trackerId, category, action, optionalValues, dimensionIndexValues, null);
+    }
+
+    @ReactMethod
+    public void trackEventWithCustomDimensionAndMetricValues(String trackerId, String category, String action, ReadableMap optionalValues, ReadableMap dimensionIndexValues, ReadableMap metricIndexValues)
+    {
         Tracker tracker = getTracker(trackerId);
 
         if (tracker != null)
@@ -220,14 +339,18 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
             HitBuilders.EventBuilder hit = new HitBuilders.EventBuilder()
                         .setCategory(category)
                         .setAction(action);
-                        
-            if (optionalValues.hasKey("label"))
+
+
+            if (optionalValues != null)
             {
-                hit.setLabel(optionalValues.getString("label"));
-            }
-            if (optionalValues.hasKey("value"))
-            {
-                hit.setValue(optionalValues.getInt("value"));
+                if (optionalValues.hasKey("label"))
+                {
+                    hit.setLabel(optionalValues.getString("label"));
+                }
+                if (optionalValues.hasKey("value"))
+                {
+                    hit.setValue((long) optionalValues.getDouble("value"));
+                }
             }
 
             ReadableMapKeySetIterator iterator = dimensionIndexValues.keySetIterator();
@@ -237,7 +360,26 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
                 hit.setCustomDimension(Integer.parseInt(dimensionIndex), dimensionValue);
             }
 
+            if(metricIndexValues != null){
+                ReadableMapKeySetIterator metricIterator = metricIndexValues.keySetIterator();
+                while (metricIterator.hasNextKey()) {
+                    String metricIndex = metricIterator.nextKey();
+                    int metricValue = metricIndexValues.getInt(metricIndex);
+                    hit.setCustomMetric(Integer.parseInt(metricIndex), metricValue);
+                }
+            }
+
             tracker.send(hit.build());
+        }
+    }
+
+    @ReactMethod
+    public void setSamplingRate(String trackerId, Double sampleRate){
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null)
+        {
+            tracker.setSampleRate(sampleRate);
         }
     }
 
@@ -308,6 +450,47 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
         if (tracker != null)
         {
             tracker.setAppVersion(appVersion);
+        }
+    }
+
+    @ReactMethod
+    public void setCurrency(String trackerId, String currencyCode)
+    {
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null) {
+            tracker.set("&cu", currencyCode);
+        }
+    }
+
+    @ReactMethod
+    public void trackCampaignFromUrl(String trackerId, String urlString){
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null)
+        {
+            tracker.setScreenName("Init With Campaign");
+            tracker.send(new HitBuilders.ScreenViewBuilder()
+                                        .setCampaignParamsFromUrl(urlString)
+                                        .build());
+        }
+    }
+  
+    @ReactMethod
+    public void createNewSession(String trackerId, String screenName) {
+        Tracker tracker = getTracker(trackerId);
+        tracker.setScreenName(screenName);
+        tracker.send(new HitBuilders.ScreenViewBuilder().setNewSession().build());
+    }
+
+    @ReactMethod
+    public void dispatch(Promise promise) {
+        GoogleAnalytics analytics = getAnalyticsInstance();
+        try {
+            analytics.dispatchLocalHits();
+            promise.resolve(true);
+        } catch (Exception ex) {
+            promise.reject(ex);
         }
     }
 }
