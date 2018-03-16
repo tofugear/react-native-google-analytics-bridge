@@ -33,7 +33,19 @@ NSString *staticTrackerId;
 
 - (NSDictionary *)constantsToExport
 {
-    return @{ @"nativeTrackerId": staticTrackerId != nil ? staticTrackerId : [NSNull null] };
+    return @{
+             @"nativeTrackerId": staticTrackerId != nil ? staticTrackerId : [NSNull null],
+             @"ProductAction": @{
+                     @"DETAIL": kGAIPADetail,
+                     @"CLICK": kGAIPAClick,
+                     @"ADD": kGAIPAAdd,
+                     @"REMOVE": kGAIPARemove,
+                     @"CHECKOUT": kGAIPACheckout,
+                     @"CHECKOUT_OPTION": kGAIPACheckoutOption,
+                     @"PURCHASE": kGAIPAPurchase,
+                     @"REFUND": kGAIPARefund,
+                     }
+             };
 }
 
 RCT_EXPORT_MODULE();
@@ -111,29 +123,15 @@ RCT_EXPORT_METHOD(trackTiming:(NSString *)trackerId category:(nonnull NSString *
 RCT_EXPORT_METHOD(trackPurchaseEvent:(NSString *)trackerId product:(NSDictionary *)product transaction:(NSDictionary *)transaction eventCategory:(NSString *)eventCategory eventAction:(NSString *)eventAction)
 {
     id<GAITracker> tracker = [[GAI sharedInstance] trackerWithTrackingId:trackerId];
-    NSString *productId = [RCTConvert NSString:product[@"id"]];
-    NSString *productName = [RCTConvert NSString:product[@"name"]];
-    NSString *productCategory = [RCTConvert NSString:product[@"category"]];
-    NSString *productBrand = [RCTConvert NSString:product[@"brand"]];
-    NSString *productVariant = [RCTConvert NSString:product[@"variant"]];
-    NSNumber *productPrice = [RCTConvert NSNumber:product[@"price"]];
-    NSString *productCouponCode = [RCTConvert NSString:product[@"couponCode"]];
-    NSNumber *productQuantity = [RCTConvert NSNumber:product[@"quantity"]];
+
     NSString *transactionId = [RCTConvert NSString:transaction[@"id"]];
     NSString *transactionAffiliation = [RCTConvert NSString:transaction[@"affiliation"]];
     NSNumber *transactionRevenue = [RCTConvert NSNumber:transaction[@"revenue"]];
     NSNumber *transactionTax = [RCTConvert NSNumber:transaction[@"tax"]];
     NSNumber *transactionShipping = [RCTConvert NSNumber:transaction[@"shipping"]];
     NSString *transactionCouponCode = [RCTConvert NSString:transaction[@"couponCode"]];
-    GAIEcommerceProduct *ecommerceProduct = [[GAIEcommerceProduct alloc] init];
-    [ecommerceProduct setId:productId];
-    [ecommerceProduct setName:productName];
-    [ecommerceProduct setCategory:productCategory];
-    [ecommerceProduct setBrand:productBrand];
-    [ecommerceProduct setVariant:productVariant];
-    [ecommerceProduct setPrice:productPrice];
-    [ecommerceProduct setCouponCode:productCouponCode];
-    [ecommerceProduct setQuantity:productQuantity];
+    GAIEcommerceProduct *ecommerceProduct = [self getEcommerceProduct:product];
+
     GAIDictionaryBuilder *builder = [GAIDictionaryBuilder createEventWithCategory:eventCategory
                                                                            action:eventAction
                                                                             label:nil
@@ -174,25 +172,9 @@ RCT_EXPORT_METHOD(trackMultiProductsPurchaseEvent:(NSString *)trackerId products
     [action setCouponCode:transactionCouponCode];
     [builder setProductAction:action];
     for (id product in products) {
-        NSString *productId = [RCTConvert NSString:product[@"id"]];
-        NSString *productName = [RCTConvert NSString:product[@"name"]];
-        NSString *productBrand = [RCTConvert NSString:product[@"brand"]];
-        NSNumber *productPrice = [RCTConvert NSNumber:product[@"price"]];
-        NSString *productVariant = [RCTConvert NSString:product[@"variant"]];
-        NSString *productCategory = [RCTConvert NSString:product[@"category"]];
-        NSNumber *productQuantity = [RCTConvert NSNumber:product[@"quantity"]];
-        GAIEcommerceProduct *ecommerceProduct = [[GAIEcommerceProduct alloc] init];
-        [ecommerceProduct setId:productId];
-        [ecommerceProduct setName:productName];
-        [ecommerceProduct setCategory:productCategory];
-        [ecommerceProduct setBrand:productBrand];
-        [ecommerceProduct setVariant:productVariant];
-        [ecommerceProduct setPrice:productPrice];
-        [ecommerceProduct setQuantity:productQuantity];
-        if ([product objectForKey:@"couponCode"]) {
-            NSString *productCouponCode = [RCTConvert NSString:product[@"couponCode"]];
-            [ecommerceProduct setCouponCode:productCouponCode];
-        }
+
+        GAIEcommerceProduct *ecommerceProduct = [self getEcommerceProduct:product];
+
         [builder addProduct:ecommerceProduct];
     }
     [tracker send:[builder build]];
@@ -224,25 +206,28 @@ RCT_EXPORT_METHOD(trackMultiProductsPurchaseEventWithCustomDimensionValues:(NSSt
     [action setCouponCode:transactionCouponCode];
     [builder setProductAction:action];
     for (id product in products) {
-        NSString *productId = [RCTConvert NSString:product[@"id"]];
-        NSString *productName = [RCTConvert NSString:product[@"name"]];
-        NSString *productBrand = [RCTConvert NSString:product[@"brand"]];
-        NSNumber *productPrice = [RCTConvert NSNumber:product[@"price"]];
-        NSString *productVariant = [RCTConvert NSString:product[@"variant"]];
-        NSString *productCategory = [RCTConvert NSString:product[@"category"]];
-        NSNumber *productQuantity = [RCTConvert NSNumber:product[@"quantity"]];
-        GAIEcommerceProduct *ecommerceProduct = [[GAIEcommerceProduct alloc] init];
-        [ecommerceProduct setId:productId];
-        [ecommerceProduct setName:productName];
-        [ecommerceProduct setCategory:productCategory];
-        [ecommerceProduct setBrand:productBrand];
-        [ecommerceProduct setVariant:productVariant];
-        [ecommerceProduct setPrice:productPrice];
-        [ecommerceProduct setQuantity:productQuantity];
-        if ([product objectForKey:@"couponCode"]) {
-            NSString *productCouponCode = [RCTConvert NSString:product[@"couponCode"]];
-            [ecommerceProduct setCouponCode:productCouponCode];
-        }
+        GAIEcommerceProduct *ecommerceProduct = [self getEcommerceProduct:product];
+        [builder addProduct:ecommerceProduct];
+    }
+    [tracker send:[builder build]];
+}
+
+RCT_EXPORT_METHOD(trackMultiProductsEvent:(NSString *)trackerId products:(NSArray *)products productAction:(NSDictionary *)productAction eventCategory:(NSString *)eventCategory eventAction:(NSString *)eventAction) {
+
+
+    id<GAITracker> tracker = [[GAI sharedInstance] trackerWithTrackingId:trackerId];
+
+    GAIDictionaryBuilder *builder = [GAIDictionaryBuilder createEventWithCategory:eventCategory
+                                                                           action:eventAction
+                                                                            label:nil
+                                                                            value:nil];
+    GAIEcommerceProductAction *action = [self getProductAction:productAction];
+
+    [builder setProductAction:action];
+    for (id product in products) {
+
+        GAIEcommerceProduct *ecommerceProduct = [self getEcommerceProduct:product];
+
         [builder addProduct:ecommerceProduct];
     }
     [tracker send:[builder build]];
@@ -394,4 +379,58 @@ RCT_EXPORT_METHOD(dispatch:(RCTPromiseResolveBlock)resolve
     return YES;
 }
 
+-(GAIEcommerceProduct*)getEcommerceProduct:(NSDictionary*)dict{
+    NSString *productId = [RCTConvert NSString:dict[@"id"]];
+    NSString *name = [RCTConvert NSString:dict[@"name"]];
+    NSString *brand = [RCTConvert NSString:dict[@"brand"]];
+    NSNumber *price = [RCTConvert NSNumber:dict[@"price"]];
+    NSString *variant = [RCTConvert NSString:dict[@"variant"]];
+    NSString *category = [RCTConvert NSString:dict[@"category"]];
+    NSNumber *quantity = [RCTConvert NSNumber:dict[@"quantity"]];
+
+    GAIEcommerceProduct *product = [[GAIEcommerceProduct alloc] init];
+
+    [product setId:productId];
+    [product setName:name];
+    [product setCategory:category];
+    [product setBrand:brand];
+    [product setVariant:variant];
+    [product setPrice:price];
+    [product setQuantity:quantity];
+    if ([dict objectForKey:@"couponCode"]) {
+        NSString *couponCode = [RCTConvert NSString:dict[@"couponCode"]];
+        [product setCouponCode:couponCode];
+    }
+    return product;
+}
+
+-(GAIEcommerceProductAction*)getProductAction:(NSDictionary*)dict{
+    NSString *action = [RCTConvert NSString:dict[@"action"]];
+    NSString *transactionId = [RCTConvert NSString:dict[@"transactionId"]];
+    NSString *affiliation = [RCTConvert NSString:dict[@"affiliation"]];
+    NSNumber *revenue = [RCTConvert NSNumber:dict[@"revenue"]];
+    NSNumber *tax = [RCTConvert NSNumber:dict[@"tax"]];
+    NSNumber *shipping = [RCTConvert NSNumber:dict[@"shipping"]];
+    NSString *couponCode = [RCTConvert NSString:dict[@"couponCode"]];
+    NSNumber *checkoutStep = [RCTConvert NSNumber:dict[@"checkoutStep"]];
+    NSString *checkoutOption = [RCTConvert NSString:dict[@"checkoutOption"]];
+    NSString *productActionList = [RCTConvert NSString:dict[@"productActionList"]];
+    NSString *productListSource = [RCTConvert NSString:dict[@"productListSource"]];
+
+    GAIEcommerceProductAction *eaction = [[GAIEcommerceProductAction alloc] init];
+
+    [eaction setAction:action];
+    [eaction setTransactionId:transactionId];
+    [eaction setAffiliation:affiliation];
+    [eaction setRevenue:revenue];
+    [eaction setTax:tax];
+    [eaction setShipping:shipping];
+    [eaction setCouponCode:couponCode];
+    [eaction setCheckoutStep:checkoutStep];
+    [eaction setCheckoutOption:checkoutOption];
+    [eaction setProductActionList:productActionList];
+    [eaction setProductListSource:productListSource];
+
+    return eaction;
+}
 @end

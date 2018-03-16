@@ -27,6 +27,10 @@ export class GoogleAnalyticsTracker {
     this.customDimensionsFieldsIndexMap = customDimensionsFieldsIndexMap;
   }
 
+  static constants = {
+    ProductAction: GoogleAnalyticsBridge.ProductAction
+  }
+
   /**
    * If Tracker has customDimensionsFieldsIndexMap, it will transform
    * customDimensions map pairs {field: value} to {fieldIndex: value}.
@@ -152,6 +156,20 @@ export class GoogleAnalyticsTracker {
   trackMultiProductsPurchaseEventWithCustomDimensionValues(products = [], transaction = {}, eventCategory = "Ecommerce", eventAction = "Purchase", customDimensions) {
     const formattedCustomDimensions = this.transformCustomDimensionsFieldsToIndexes(customDimensions);
     GoogleAnalyticsBridge.trackMultiProductsPurchaseEventWithCustomDimensionValues(this.id, products, transaction, eventCategory, eventAction, formattedCustomDimensions);
+  }
+
+  /**
+   * Track a purchase event. This uses the Enhanced Ecommerce GA feature.
+   * @param  {Array} products       An array with products
+   * @param  {Object} productAction   An object with product action values
+   * @param  {String} eventCategory The event category, defaults to Ecommerce
+   * @param  {String} eventAction   The event action, defaults to productAction.action or Purchase
+   */
+  trackMultiProductsEvent(products = [], productAction = {}, eventCategory = "Ecommerce", eventAction = null) {
+    if (!eventAction){
+      eventAction = productAction.action || 'Purchase'
+    }
+    GoogleAnalyticsBridge.trackMultiProductsEvent(this.id, products, productAction, eventCategory, eventAction);
   }
 
   /**
@@ -294,3 +312,6 @@ export class GoogleAnalyticsTracker {
     });
   }
 }
+
+export const constants = GoogleAnalyticsTracker.constants;
+
