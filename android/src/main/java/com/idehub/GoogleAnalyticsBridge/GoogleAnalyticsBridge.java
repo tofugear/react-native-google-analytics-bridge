@@ -52,6 +52,19 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
     public Map<String, Object> getConstants() {
         final Map<String, Object> constants = new HashMap<>();
         constants.put("nativeTrackerId", _trackingId);
+
+        final Map<String, Object> actions = new HashMap<>();
+        actions.put("DETAIL", ProductAction.ACTION_DETAIL);
+        actions.put("CLICK", ProductAction.ACTION_CLICK);
+        actions.put("ADD", ProductAction.ACTION_ADD);
+        actions.put("REMOVE", ProductAction.ACTION_REMOVE);
+        actions.put("CHECKOUT", ProductAction.ACTION_CHECKOUT);
+        actions.put("CHECKOUT_OPTION", ProductAction.ACTION_CHECKOUT_OPTION);
+        actions.put("PURCHASE", ProductAction.ACTION_PURCHASE);
+        actions.put("REFUND", ProductAction.ACTION_REFUND);
+
+        constants.put("ProductAction", actions);
+
         return constants;
     }
 
@@ -182,6 +195,26 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
         }
     }
 
+    @ReactMethod
+    public void trackMultiProductsEvent(String trackerId, ReadableArray products, ReadableMap transaction, String eventCategory, String eventAction) {
+        Tracker tracker = getTracker(trackerId);
+
+        if (tracker != null) {
+
+            HitBuilders.EventBuilder hit = new HitBuilders.EventBuilder()
+                   .setProductAction(this.getProductAction(transaction))
+                   .setCategory(eventCategory)
+                   .setAction(eventAction);
+
+            for (int i = 0; i < products.size(); i++) {
+                ReadableMap product = products.getMap(i);
+                hit.addProduct(this.getPurchaseProduct(product));
+            }
+
+            tracker.send(hit.build());
+        }
+    }
+
     private ProductAction getPurchaseTransaction(ReadableMap transaction) {
         ProductAction productAction = new ProductAction(ProductAction.ACTION_PURCHASE)
            .setTransactionId(transaction.getString("id"));
@@ -245,6 +278,52 @@ public class GoogleAnalyticsBridge extends ReactContextBaseJavaModule {
         }
 
         return ecommerceProduct;
+    }
+
+    private ProductAction getProductAction(ReadableMap transaction) {
+        ProductAction productAction = new ProductAction(transaction.getString("action"));
+
+        if(transaction.hasKey("transactionId")) {
+           productAction.setTransactionId(transaction.getString("transactionId"));
+        }
+
+        if(transaction.hasKey("tax")) {
+           productAction.setTransactionTax(transaction.getDouble("tax"));
+        }
+
+        if(transaction.hasKey("revenue")) {
+           productAction.setTransactionRevenue(transaction.getDouble("revenue"));
+        }
+
+        if(transaction.hasKey("shipping")) {
+           productAction.setTransactionShipping(transaction.getDouble("shipping"));
+        }
+
+        if(transaction.hasKey("couponCode")) {
+           productAction.setTransactionCouponCode(transaction.getString("couponCode"));
+        }
+
+        if(transaction.hasKey("affiliation")) {
+           productAction.setTransactionAffiliation(transaction.getString("affiliation"));
+        }
+
+        if(transaction.hasKey("checkoutStep")) {
+           productAction.setCheckoutStep(transaction.getInt("checkoutStep"));
+        }
+
+        if(transaction.hasKey("checkoutOption")) {
+           productAction.setCheckoutOptions(transaction.getString("checkoutOption"));
+        }
+
+        if(transaction.hasKey("productActionList")) {
+           productAction.setProductActionList(transaction.getString("productActionList"));
+        }
+
+        if(transaction.hasKey("productListSource")) {
+           productAction.setProductListSource(transaction.getString("productListSource"));
+        }
+
+        return productAction;
     }
 
     @ReactMethod
